@@ -648,3 +648,209 @@ SQL Plan如下
 - 学习Oceanbase性能监控方面的细节。
 - 和晓楚学长讨论，对实习项目有初步的需求规划，并加以完善，写出需求文档。
 - 对实习项目的系统功能、接口初步设计，写出功能文档。
+
+
+
+
+
+
+
+#### v$sql_audit 记录每一个sql请求的执行情况
+按照什么排序？如何查到指定的sql语句情况
+
+开启alter system set enable_sql_audit = true;才可以
+
+如果发现sql_audit会淘汰你的sql，需要调大一点sql_audit的内存
+
+alter system set sql_audit_memory_limit = '4G';
+
+记录每条sql的执行情况，plan_id,参数化后的sql_id
+
+只能记录整条sql的执行状况，很笼统，不能看出是否是分布式的执行计划。通过plan_id去plan_cache_plan_stat中查找具体的plan。
+
+1. SVR_IP ip地址，分布式并行执行的话是什么？
+2. SVR_PORT 端口号
+3. REQUEST_ID 请求ID，干什么用的？
+4. SQL_EXEC_ID ？？？
+5. TRACE_ID trace的id，可以通过trace获得
+6. SID  ？？？
+7. CLIENT_IP 执行SQL的客户端IP
+8. CLIENT_PORT 客户端端口
+9. TENANT_ID  租户ID
+10. TENANT_NAME  租户名
+11. USER_ID 用户ID
+12. USER_NAME 用户名
+13. USER_CLIENT_IP 用户客户端IP
+14. DB_ID  数据库ID？
+15. DB_NAME 数据库名？
+16. SQL_ID  SQL参数化后的ID
+17. QUERY_ID    查询ID，什么用？
+18. PLAN_ID 计划ID
+19. AFFECTED_ROWS 影响行数
+20. RETURN_ROWS 返回行数
+21. PARTITION_CNT 分区数
+22. RET_CODE 返回码
+23. QC_ID  Query Coordinate ID，并行执行之后，协调算子的ID，协调算子协调job应该发往哪些节点。
+24. DFO_ID 其实就是执行每个job的job_id
+25. SQC_ID 其实就是taskID，多线程执行的。
+26. WORKER_ID ？？
+27. EVENT 最长等待时间名
+28. P1TEXT 等待事件参数1
+29. P1 等待事件1
+30. P2TEXT 等待事件参数2
+31. P2 等待事件2
+32. P3TEXT  等待事件参数3
+33. P3  等待事件3
+34. LEVEL 等待事件的LEVEL级别
+35. WAIT_CLASS_ID   等待事件的所属class id， classId是什么？
+36. WAIT_CLASS# 等待事件的所属class下标
+37. WAIT_CLASS  等待事件的所属class名称
+38. STATE   等待事件的状态
+39. WAITE_TIME_MICRO    该等待事件所等待的时间（us）
+40. TOTAL_WAIT_TIME_MICRO 过程中总共的等待时间
+41. TOTAL_WAITS 执行过程中总的等待次数
+42. RPC_COUNT   发送RPC次数
+43. PLAN_TYPE   执行计划类型 local、remote、distribute
+44. IS_INNER_SQL    是否是内部请求sql
+45. IS_EXECUTOR_RPC 当前请求是否是rpc
+46. IS_HIT_PLAN 是否命中plan cache
+47. REQUEST_TIME 开始执行时间点
+48. ELAPSED_TIME    接收到请求到请求结束，消耗的总时间
+49. NET_TIME 发送rpc到接收到请求的时间
+50. NET_WAIT_TIME 接收到请求到进入队列时间
+51. QUEUE_TIME 请求在队列中等待的时间
+52. DECODE_TIME 出队列后decode所用时间
+53. GET_PLAN_TIME 开始执行到获得到sql plan的时间
+54. EXECUTE_TIME plan执行消耗的时间
+55. APPLICATION_WAIT_TIME 所有application类事件的总时间
+56. CONCURRENCY_WAIT_TIME 所有并发类事件的总时间
+57. USER_IO_WAIT_TIME 所有USER_IO类事件的总时间
+58. SCHEDULE_TIME 所有schedule类事件的总时间。
+59. ROW_CHCHE_HIT 行缓存命中次数
+60. BLOOM_FILTER_CACHE_HIT bloom filter缓存命中次数
+61. BLOCK_CACHE_HIT 块缓存命中次数
+62. BLOCK_INDEX_CHACHE_HIT 快缓存索引命中次数
+63. DISK_READS  物理读取次数
+64. RETRY_CNT 重试次数
+65. TABLE_SCAN 是否为全表扫描
+66. CONSISTENCY_LEVEL 一致性级别，各个级别有什么区别？
+67. MEMSTORE_READ_ROW_COUNT memstore中读取的行数
+68. SSSTORE_READ_ROW_COUNT ssstable中读取的行数
+69. REQUEST_MEMORY_USED 该请求消耗的内存大小
+70. EXPECTED_WORKWE_COUNT ？？？
+71. USED_WORKER_COUNT ？？？
+72. SCHED_INFO ？？？
+73. FUSE_ROW_CACHE_HIT ？？？
+
+
+#### v$plan_cache_stat 每个计划缓存的状态
+
+计划缓存是根据租户隔离的，每个租户在每个observer上有一个计划缓存，每一个计划缓存是v$plan_cache_stat的一条记录。
+
+1. tenant_id 租户ID
+2. svr_ip 服务器ip，这个缓存表在哪个服务器
+3. svr_port 服务器端口
+4. sql_num 缓存的sql条数
+5. mem_used 已经占用内存大小
+6. mem_hold ？？？
+7. access_count 进该plan_cache的次数
+8. hit_count 命中该plan_cache的次数
+9. hit_rate 命中率
+10. plan_num ,plan的总数
+11. mem_limit ,该plan_cache的内存上限
+12. hash_bucket ,plan_cache的hash map的bucket个数
+13. stmtkey_num stmtkey的个数。。和sql_num的关系是什么？？
+
+#### v$plan_cache_plan_stat 
+
+记录中包括这个计划是哪个租户，哪个ip地址，哪个port的计划缓存。
+
+这个视图保存了每个plan对应的参数化后的sql，并且记录了生成这个plan的第一个sql的完整带参数语句。
+
+这里的sql_id是生成这个plan的sql经过加密后的结果。
+
+主键是(plan_id,tenant_id),可以通过这个plan_id和tenant_id, 查找v$plan_cache_plan_explain中对应的物理执行计划。
+
+1. tenant_id 租户ID
+2. svr_ip 服务器的ip
+3. svr_port 服务器端口
+4. plan_id ，plan的id
+5. sql_id ，sql的id
+6. type，plan的类型
+7. is_bind_sensitive 该计划是否需要打开acs？？？？
+8. is_bind_aware 该计划已经打开了acs？？
+9. db_id 数据库的id
+10. statement 参数化后的sql语句
+11. query_sql 实际的查询sql
+12. special_params 特殊的参数？？？
+13. param_infos 参数信息？？
+14. sys_vars 影响计划的系统变量的值
+15. plan_hash ，plan的hash值
+16. first_load_time， 该plan第一次被加载的时间
+17. schema_version， schema的版本号
+18. merged_version， 当前缓存的plan对应的合并版本号？？
+19. last_active_time， 最后一次执行时间
+20. avg_exe_usec，平均执行时间
+21. slowest_exe_time 最慢执行时间
+22. slowest_exe_usec，最慢执行时间戳？？
+23. slow_count，当前plan成为慢查询次数？？
+24. hit_count，被命中次数
+25. plan_size，plan的大小
+26. executions， 执行次数？？？和命中次数真么关系？
+27. disk_reads， 所有执行物理读次数
+28. direct_writes，所有执行写盘的次数
+29. buffer_gets， 所有执行逻辑读的次数
+30. application_wait_time 所有执行所有application类事件的总时间
+31. concurrency_wait_time 所有执行所有concurrency类事件的总时间
+32. user_io_wait_time 所有执行所有user_io类事件的总时间
+33. rows_processed 所有执行选择的结果行数或执行更改表中的行数
+34. elapsed_time 所有执行接收到请求到执行结束消耗时间
+35. cpu_time 所有执行消耗的cpu时间
+36. large_querys 被判断为大查询的次数
+37. delayed_large_querys 被判断为大查询且被丢入大查询队列的次数
+38. delayed_px_querys ？？？
+39. outline_version ，outline版本号
+40. outline_id ，outline的id，为-1表示不是通过绑定outline生成的计划
+41. outline_data，计划对应的outline信息
+42. asc_sel_info，当前acs计划对应的选择率空间？？？
+43. table_scan ，表示该查询是否为主键扫描
+44. evolution ，表示该执行计划是否在演进中
+45. evo_executions，演进次数
+46. evo_cpu_time，演进过程中总的执行CPU时间
+47. timeout_count，超时次数
+48. ps_stmt_id，prepare statement id？？？
+49. sessid ？？？
+50. temp_tables ？？？
+51. is_use_jit 是否使用jit
+52. object_type ？？？
+
+#### v$plan_cache_plan_explain
+
+可以通过tenant_id和plan_id查看某个plan的具体物理执行计划。
+包含了 IP地址和PORT
+
+1. TENANT_ID 租户ID
+2. IP ，Plan所在IP地址
+3. PORT，Plan所在端口号
+4. PLAN_ID，plan的id
+5. OPERATOR，operator名称
+6. NAME，表的名称
+7. ROWS，预估结果行
+8. COST，预估代价
+9. PROPERTY，对应operator的信息 
+
+#### sql trace 提供上一次sql请求的各过程执行信息。
+
+set ob_enable_trace_log = 1;
+
+只能查看最近一条执行sql的具体执行情况，我在实现的时候可能要采样最近的执行sql，设计一个缓存。
+
+
+### Explain 相关
+
+explain不真正执行sql，只是统计信息的判断，这种有什么意义？
+
+需要哪些视图？sql_audit、plan_cache_plan_stat、trace？
+
+需要哪些功能？
+
